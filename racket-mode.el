@@ -1,23 +1,3 @@
-;;; racket-mode.el --- Racket mode for Emacs
-
-;; Goals:
-;; - Focus on Racket (not various Schemes).
-;; - Fontify all Racket keywords, builtins, and so on.
-;; - Fontify variations of define for functions and variables.
-;; - Follow DrRacket concepts where applicable.
-;; - Compatible with Emacs 23.4 and 24+.
-;;
-;; Acknowledgements:
-;;
-;; - Obviously the existing Emacs Scheme mode and Inferior Scheme mode.
-;;
-;; - The source code for Neil Van Dyke's Quack provided a model for
-;;   many of the scheme-indent-function settings, smart paren closing,
-;;   and pretty lambda.
-
-(defconst racket-mode-copyright
-  "Copyright (c) 2013 by Greg Hendershott. Portions Copyright (c) Free Software Foundation and Copyright (c) 2002-2012 Neil Van Dyke.")
-
 (defconst racket-mode-legal-notice
   "This is free software; you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
@@ -27,73 +7,9 @@ without even the implied warranty of merchantability or fitness for a
 particular purpose.  See the GNU General Public License for more details.  See
 http://www.gnu.org/licenses/ for details.")
 
-(defconst racket-mode-version "0.1")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Racket mode
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defvar racket-program "racket"
-  "Pathname of Racket program.")
+(defconst racket-mode-version "0.2")
 
 (defconst racket-lambda-char (make-char 'greek-iso8859-7 107))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Like DrRacket's F5 (Run)
-
-(defun racket-eval (str)
-  (let ((w (selected-window)))
-    (set-buffer-modified-p t)           ;force save buffer so that enter! ...
-    (save-buffer)                       ;...will re-evaluate
-
-    ;; If racket process already visible in a window use that, else
-    ;; use previous window.
-    (let ((rw (get-buffer-window inferior-racket-buffer-name)))
-      (if rw
-          (select-window rw)
-        (other-window -1)))
-
-    (run-racket)
-    (select-window w)
-
-    (comint-send-string (get-inferior-racket-buffer-process) str)
-
-    (pop-to-buffer inferior-racket-buffer-name t)
-    (select-window w)))
-
-(defun racket-run ()
-  "Save and evaluate the buffer in a fresh REPL like DrRacket."
-  (interactive)
-  (racket-eval (format "(run! \"%s\")\n" (buffer-file-name))))
-
-(defun racket-shell (cmd)
-  (let ((w (selected-window)))
-    (save-buffer)
-    (message (concat cmd "..."))
-    (other-window -1)
-    (shell)
-    (pop-to-buffer-same-window "*shell*")
-    (comint-send-string "*shell*" (concat cmd "\n"))
-    (select-window w)
-    (sit-for 3)
-    (message nil)))
-
-(defun racket-racket ()
-  "Do `racket <file>` in *shell* buffer."
-  (interactive)
-  (racket-shell (concat racket-program
-                        " "
-                        (buffer-file-name))))
-
-(defun racket-raco-test ()
-  "Do `raco test -x <file>` in *shell* buffer.
-To run <file>'s `test` submodule."
-  (interactive)
-  (racket-shell (concat (file-name-directory racket-program) "/" "raco"
-                        " test -x "
-                        (buffer-file-name))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Enter = enter + indent
@@ -153,7 +69,7 @@ To run <file>'s `test` submodule."
 (defun racket-set-indentation ()
   (mapc (lambda (x)
           (put (car x) 'scheme-indent-function (cdr x)))
-        '((begin0 . 1)
+        '((begin0 . 0)
           (c-declare . 0)
           (c-lambda . 2)
           (case-lambda . 0)
@@ -1554,7 +1470,7 @@ To run <file>'s `test` submodule."
      (3 font-lock-function-name-face nil t))
 
     ;; keyword argument
-    ("#:[^ ]+"                  . racket-keyword-argument-face)
+    ("#:[^][(){}\n ]+"                  . racket-keyword-argument-face)
 
     ;; symbol
     ("'\\sw+"                   . racket-selfeval-face)
@@ -1575,7 +1491,10 @@ To run <file>'s `test` submodule."
     ("(\\(define-values[ ]*(\\([^(]+\\))\\)" 2 font-lock-variable-name-face)
 
     ;; defineXxx -- functions
-    ("(\\(define[^ ]*[ ]*([ ]*\\([^ ]+\\)\\)" 2 font-lock-function-name-face)
+    ("(\\(define[^][(){}\n ]+[ ]*([ ]*\\([^ ]+\\)\\)" 2 font-lock-function-name-face)
+    
+    ;;defineXxx -- variables
+    ("(\\(define[^][(){}\n ]+[ ]+\\([^(]+\\)\\)" 2 font-lock-variable-name-face)
 
     ;; pretty lambda
     ("[[(]\\(case-\\|match-\\|opt-\\)?\\(lambda\\)\\>"
@@ -1681,17 +1600,13 @@ All commands in `lisp-mode-shared-map' are inherited by this map.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keys
 
-(define-key racket-mode-map (kbd "<f5>")     'racket-run)
-(define-key racket-mode-map (kbd "M-C-<f5>") 'racket-racket)
-(define-key racket-mode-map (kbd "C-<f5>")   'racket-raco-test)
+;; (define-key racket-mode-map (kbd "<f5>")     'racket-run)
+;; (define-key racket-mode-map (kbd "M-C-<f5>") 'racket-racket)
+;; (define-key racket-mode-map (kbd "C-<f5>")   'racket-raco-test)
 (define-key racket-mode-map "\r"             'racket-newline)
 (define-key racket-mode-map ")"              'racket-insert-closing-paren)
 (define-key racket-mode-map "]"              'racket-insert-closing-bracket)
 (define-key racket-mode-map "}"              'racket-insert-closing-brace)
-(define-key racket-mode-map "\M-\C-y"        'racket-insert-lambda)
-(define-key racket-mode-map "\M-\C-x"        'racket-send-definition)
-(define-key racket-mode-map "\C-x\C-e"       'racket-send-last-sexp)
-(define-key racket-mode-map "\C-c\C-r"       'racket-send-region)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Files
@@ -1730,80 +1645,3 @@ All commands in `lisp-mode-shared-map' are inherited by this map.")
   )
 
 (provide 'racket-mode)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Inferior Racket mode
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Move this to its own file?
-
-;; (require 'racket-mode)  ;if we move to its own file
-(require 'comint)
-
-(setq inferior-racket-buffer-name "*racket*")
-(defun get-inferior-racket-buffer-process ()
-  (get-buffer-process inferior-racket-buffer-name))
-
-(define-derived-mode inferior-racket-mode comint-mode "Inferior Racket"
-  "Major mode for interacting with Racket process."
-  (setq comint-prompt-regexp "^[^>\n]*>+ *")
-  (racket-mode-variables nil)
-  (setq mode-line-process '(":%s"))
-  (setq comint-input-filter (function racket-input-filter))
-  (setq comint-get-old-input (function racket-get-old-input)))
-
-(defcustom inferior-racket-filter-regexp "\\`\\s *\\S ?\\S ?\\s *\\'"
-  "Input matching this regexp are not saved on the history list.
-Defaults to a regexp ignoring all inputs of 0, 1, or 2 letters."
-  :type 'regexp
-  :group 'racket)
-
-(defun racket-input-filter (str)
-  "Don't save anything matching `inferior-racket-filter-regexp'."
-  (not (string-match inferior-racket-filter-regexp str)))
-
-(defun racket-get-old-input ()
-  "Snarf the sexp ending at point."
-  (save-excursion
-    (let ((end (point)))
-      (backward-sexp)
-      (buffer-substring (point) end))))
-
-;; Runtime path to this file and to sandbox.rkt.
-(setq elisp-dir (file-name-directory load-file-name))
-(setq sandbox-rkt (expand-file-name "sandbox.rkt" elisp-dir))
-
-;;;###autoload
-(defun run-racket ()
-  "Run an inferior Racket process, input and output via buffer `*racket*'.
-If there is a process already running in `*racket*', switch to that buffer.
-Runs the hook `inferior-racket-mode-hook' \(after the `comint-mode-hook'
-is run)."
-  (interactive)
-  (unless (comint-check-proc inferior-racket-buffer-name)
-    (set-buffer (make-comint "racket" racket-program nil sandbox-rkt))
-    (inferior-racket-mode))
-  (setq racket-buffer inferior-racket-buffer-name)
-  (pop-to-buffer-same-window inferior-racket-buffer-name))
-
-(defun racket-send-region (start end)
-  "Send the current region to the inferior Racket process."
-  (interactive "r")
-  (comint-send-region (get-inferior-racket-buffer-process) start end)
-  (comint-send-string (get-inferior-racket-buffer-process) "\n"))
-
-(defun racket-send-definition ()
-  "Send the current definition to the inferior Racket process."
-  (interactive)
-  (save-excursion
-   (end-of-defun)
-   (let ((end (point)))
-     (beginning-of-defun)
-     (racket-send-region (point) end))))
-
-(defun racket-send-last-sexp ()
-  "Send the previous sexp to the inferior Racket process."
-  (interactive)
-  (racket-send-region (save-excursion (backward-sexp) (point)) (point)))
